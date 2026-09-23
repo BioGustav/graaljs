@@ -595,9 +595,11 @@ public class Deserializer {
         SerializationTag sharedJavaObjectTag = readTag();
         assert sharedJavaObjectTag == SerializationTag.SHARED_JAVA_OBJECT;
         Object wasmMemory = readSharedJavaObject();
+        boolean addressType64 = readWasmMemory64Flag();
 
         JSContext context = realm.getContext();
         JSWebAssemblyMemoryObject webAssemblyMemory = JSWebAssemblyMemory.createMaximumUnknown(context, realm, wasmMemory, true);
+        assert webAssemblyMemory.hasAddressType64() == addressType64;
         assignId(webAssemblyMemory);
         JSArrayBufferObject arrayBuffer = (JSArrayBufferObject) readValue(realm);
         synchronized (wasmMemory) {
@@ -622,16 +624,29 @@ public class Deserializer {
         SerializationTag sharedJavaObjectTag = readTag();
         assert sharedJavaObjectTag == SerializationTag.SHARED_JAVA_OBJECT;
         Object wasmMemory = readSharedJavaObject();
+        boolean addressType64 = readWasmMemory64Flag();
 
         sharedJavaObjectTag = readTag();
         assert sharedJavaObjectTag == SerializationTag.SHARED_JAVA_OBJECT;
         JSAgentWaiterList waiterList = (JSAgentWaiterList) readSharedJavaObject();
 
         JSWebAssemblyMemoryObject webAssemblyMemory = JSWebAssemblyMemory.createMaximumUnknown(context, realm, wasmMemory, true);
+        assert webAssemblyMemory.hasAddressType64() == addressType64;
         JSArrayBufferObject arrayBuffer = webAssemblyMemory.createResizableBufferObject(context, realm);
         JSSharedArrayBuffer.setWaiterList(arrayBuffer, waiterList);
         assignId(arrayBuffer);
         return (peekTag() == SerializationTag.ARRAY_BUFFER_VIEW) ? readJSArrayBufferView(context, realm, arrayBuffer) : arrayBuffer;
+    }
+
+    private boolean readWasmMemory64Flag() {
+        if (!buffer.hasRemaining()) {
+            throw underflowError();
+        }
+        byte memory64 = buffer.get();
+        if (memory64 != 0 && memory64 != 1) {
+            throw Errors.createError("Invalid WebAssembly memory address type");
+        }
+        return memory64 == 1;
     }
 
     public Object readSharedJavaObject() {

@@ -444,6 +444,7 @@ public class Serializer {
         if (!sharedArrayBuffer.isFixedLength() && memoryObject instanceof JSWebAssemblyMemoryObject webAssemblyMemory && access.getCurrentMessagePortData() != null) {
             writeTag(SerializationTag.WASM_MEMORY_BUFFER);
             writeSharedJavaObjectReference(webAssemblyMemory.getWASMMemory());
+            writeByte((byte) (webAssemblyMemory.hasAddressType64() ? 1 : 0));
             writeSharedJavaObjectReference(JSArrayBufferObject.getWaiterList(sharedArrayBuffer));
             return;
         }
@@ -464,6 +465,7 @@ public class Serializer {
             JSRealm realm = JSRealm.get(null);
             JSContext context = realm.getContext();
             writeSharedJavaObjectReference(wasmMemory.getWASMMemory());
+            writeByte((byte) (wasmMemory.hasAddressType64() ? 1 : 0));
             writeValue(wasmMemory.getBufferObject(context, realm));
         } else {
             // non-shared WebAssembly.Memory cannot be cloned
