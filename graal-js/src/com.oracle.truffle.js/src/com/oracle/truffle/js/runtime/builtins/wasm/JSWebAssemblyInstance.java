@@ -172,10 +172,12 @@ public final class JSWebAssemblyInstance extends JSNonProxy implements JSConstru
                 } else if (Strings.MEMORY.equals(externtype)) {
                     TruffleString type = asTString(exportInterop.readMember(exportInfo, "type"));
                     String memoryType = type.toJavaStringUncached();
-                    int separator = memoryType.indexOf(' ');
-                    boolean shared = memoryType.startsWith("shared");
-                    long maximum = separator >= 0 ? Long.parseUnsignedLong(memoryType.substring(separator + 1)) : JSWebAssemblyMemory.NO_MAXIMUM;
-                    value = JSWebAssemblyMemory.create(context, realm, externval, shared, maximum);
+                    boolean addressType64 = memoryType.startsWith("i64 ");
+                    String memoryLimits = addressType64 || memoryType.startsWith("i32 ") ? memoryType.substring(4) : memoryType;
+                    int separator = memoryLimits.indexOf(' ');
+                    boolean shared = memoryLimits.startsWith("shared");
+                    long maximum = separator >= 0 ? Long.parseUnsignedLong(memoryLimits.substring(separator + 1)) : JSWebAssemblyMemory.NO_MAXIMUM;
+                    value = JSWebAssemblyMemory.create(context, realm, externval, shared, maximum, addressType64);
                 } else if (Strings.TABLE.equals(externtype)) {
                     TruffleString typeStr = asTString(exportInterop.readMember(exportInfo, "type"));
                     String tableType = typeStr.toJavaStringUncached();

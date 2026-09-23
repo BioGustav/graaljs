@@ -70,12 +70,14 @@ public final class JSWebAssemblyMemoryObject extends JSNonProxyObject {
     private JSArrayBufferObject bufferObject;
     private final boolean shared;
     private final long maximum;
+    private final boolean addressType64;
 
-    protected JSWebAssemblyMemoryObject(Shape shape, JSDynamicObject proto, Object wasmMemory, boolean shared, long maximum) {
+    protected JSWebAssemblyMemoryObject(Shape shape, JSDynamicObject proto, Object wasmMemory, boolean shared, long maximum, boolean addressType64) {
         super(shape, proto);
         this.wasmMemory = wasmMemory;
         this.shared = shared;
         this.maximum = maximum;
+        this.addressType64 = addressType64;
     }
 
     public Object getWASMMemory() {
@@ -88,6 +90,10 @@ public final class JSWebAssemblyMemoryObject extends JSNonProxyObject {
 
     public boolean hasMaximum() {
         return maximum != JSWebAssemblyMemory.NO_MAXIMUM;
+    }
+
+    public boolean hasAddressType64() {
+        return addressType64;
     }
 
     @TruffleBoundary

@@ -201,7 +201,6 @@ import com.oracle.truffle.js.nodes.promise.PromiseResolveThenableNode;
 import com.oracle.truffle.js.nodes.unary.IsCallableNode;
 import com.oracle.truffle.js.nodes.wasm.AddressValueToU64Node;
 import com.oracle.truffle.js.nodes.wasm.ExportByteSourceNode;
-import com.oracle.truffle.js.nodes.wasm.ToWebAssemblyIndexOrSizeNode;
 import com.oracle.truffle.js.nodes.wasm.ToWebAssemblyValueNode;
 import com.oracle.truffle.js.runtime.BigInt;
 import com.oracle.truffle.js.runtime.Errors;
@@ -3429,13 +3428,13 @@ public final class ConstructorBuiltins extends JSBuiltinsContainer.SwitchEnum<Co
     }
 
     public abstract static class ConstructWebAssemblyMemoryNode extends ConstructWithNewTargetNode {
-
         @Child IsObjectNode isObjectNode;
         @Child PropertyGetNode getInitialNode;
         @Child PropertyGetNode getMaximumNode;
+        @Child PropertyGetNode getAddressNode;
         @Child GetBooleanOptionNode getSharedNode;
-        @Child ToWebAssemblyIndexOrSizeNode toInitialSizeNode;
-        @Child ToWebAssemblyIndexOrSizeNode toMaximumSizeNode;
+        @Child AddressValueToU64Node toInitialSizeNode;
+        @Child AddressValueToU64Node toMaximumSizeNode;
         @Child InteropLibrary memAllocLib;
 
         public ConstructWebAssemblyMemoryNode(JSContext context, JSBuiltin builtin, boolean newTargetCase) {
@@ -3443,57 +3442,82 @@ public final class ConstructorBuiltins extends JSBuiltinsContainer.SwitchEnum<Co
             this.isObjectNode = IsObjectNode.create();
             this.getInitialNode = PropertyGetNode.create(Strings.INITIAL, context);
             this.getMaximumNode = PropertyGetNode.create(Strings.MAXIMUM, context);
+            this.getAddressNode = PropertyGetNode.create(Strings.ADDRESS, context);
             this.getSharedNode = GetBooleanOptionNode.create(context, Strings.SHARED, false);
-            this.toInitialSizeNode = ToWebAssemblyIndexOrSizeNode.create("WebAssembly.Memory(): Property 'initial'");
-            this.toMaximumSizeNode = ToWebAssemblyIndexOrSizeNode.create("WebAssembly.Memory(): Property 'maximum'");
+            this.toInitialSizeNode = AddressValueToU64Node.create("WebAssembly.Memory(): Property 'initial'");
+            this.toMaximumSizeNode = AddressValueToU64Node.create("WebAssembly.Memory(): Property 'maximum'");
             this.memAllocLib = InteropLibrary.getFactory().createDispatched(JSConfig.InteropLibraryLimit);
         }
 
         @Specialization
         protected JSObject constructMemory(JSDynamicObject newTarget, Object descriptor,
-                        @Cached InlinedConditionProfile isShared) {
+                        @Cached JSToStringNode toStringNode,
+                        @Cached TruffleString.ToJavaStringNode toJavaString,
+                        @Cached InlinedConditionProfile isShared,
+                        @Cached InlinedBranchProfile errorBranch) {
             if (!isObjectNode.executeBoolean(descriptor)) {
+                errorBranch.enter(this);
                 throw Errors.createTypeError("WebAssembly.Memory(): Argument 0 must be a memory descriptor", this);
+            }
+            Object address = getAddressNode.getValue(descriptor);
+            String addressType = address == Undefined.instance ? "i32" : toJavaString.execute(toStringNode.executeString(address));
+            boolean addressType64;
+            if ("i32".equals(addressType)) {
+                addressType64 = false;
+            } else if ("i64".equals(addressType)) {
+                addressType64 = true;
+            } else {
+                errorBranch.enter(this);
+                throw Errors.createTypeError("WebAssembly.Memory(): Descriptor property 'address' must be 'i32' or 'i64'", this);
             }
             Object initial = getInitialNode.getValue(descriptor);
             if (initial == Undefined.instance) {
+                errorBranch.enter(this);
                 throw Errors.createTypeError("WebAssembly.Memory(): Property 'initial' is required", this);
             }
-            int initialInt = toInitialSizeNode.executeInt(initial);
-            if (initialInt > JSWebAssemblyMemory.MAX_MEMORY_SIZE) {
-                throw Errors.createRangeErrorFormat("WebAssembly.Memory(): Property 'initial': value %d is above the upper bound %d", this, initialInt, JSWebAssemblyMemory.MAX_MEMORY_SIZE);
+            long initialSize = toInitialSizeNode.execute(initial, addressType64);
+            long memorySizeLimit = addressType64 ? JSWebAssemblyMemory.MAX_MEMORY_64_SIZE : JSWebAssemblyMemory.MAX_MEMORY_SIZE;
+            if (Long.compareUnsigned(initialSize, memorySizeLimit) > 0) {
+                errorBranch.enter(this);
+                throw Errors.createRangeErrorFormat("WebAssembly.Memory(): Property 'initial': value %s is above the upper bound %d", this,
+                                JSRuntime.longToUnsignedString(initialSize), memorySizeLimit);
+            }
+            long declaredMaximum;
+            Object maximum = getMaximumNode.getValue(descriptor);
+            if (maximum == Undefined.instance) {
+                declaredMaximum = JSWebAssemblyMemory.NO_MAXIMUM;
+            } else {
+                declaredMaximum = toMaximumSizeNode.execute(maximum, addressType64);
+                if (Long.compareUnsigned(initialSize, declaredMaximum) > 0) {
+                    errorBranch.enter(this);
+                    throw Errors.createRangeErrorFormat("WebAssembly.Memory(): Property 'maximum': value %s is below the lower bound %s", this,
+                                    JSRuntime.longToUnsignedString(declaredMaximum), JSRuntime.longToUnsignedString(initialSize));
+                }
+                if (Long.compareUnsigned(declaredMaximum, memorySizeLimit) > 0) {
+                    errorBranch.enter(this);
+                    throw Errors.createRangeErrorFormat("WebAssembly.Memory(): Property 'maximum': value %s is above the upper bound %d", this,
+                                    JSRuntime.longToUnsignedString(declaredMaximum), memorySizeLimit);
+                }
             }
             Boolean shared = getSharedNode.executeValue(descriptor);
             boolean sharedBoolean = isShared.profile(this, Boolean.TRUE.equals(shared));
-            int maximumInt;
-            Object maximum = getMaximumNode.getValue(descriptor);
-            if (maximum == Undefined.instance) {
-                if (sharedBoolean) {
-                    throw Errors.createTypeError("WebAssembly.Memory(): Property 'maximum' is required for shared memory", this);
-                }
-                maximumInt = JSWebAssemblyMemory.MAX_MEMORY_SIZE;
-            } else {
-                maximumInt = toMaximumSizeNode.executeInt(maximum);
-                if (maximumInt < initialInt) {
-                    throw Errors.createRangeErrorFormat("WebAssembly.Memory(): Property 'maximum': value %d is below the lower bound %d", this, maximumInt, initialInt);
-                }
-                if (maximumInt > JSWebAssemblyMemory.MAX_MEMORY_SIZE) {
-                    throw Errors.createRangeErrorFormat("WebAssembly.Memory(): Property 'maximum': value %d is above the upper bound %d", this, maximumInt, JSWebAssemblyMemory.MAX_MEMORY_SIZE);
-                }
+            if (sharedBoolean && maximum == Undefined.instance) {
+                errorBranch.enter(this);
+                throw Errors.createTypeError("WebAssembly.Memory(): Property 'maximum' is required for shared memory", this);
             }
             JSRealm realm = getRealm();
-            int declaredMaximum = maximum == Undefined.instance ? JSWebAssemblyMemory.NO_MAXIMUM : maximumInt;
             Object wasmMemory;
             try {
                 Object createMemory = realm.getWASMMemAlloc();
-                wasmMemory = memAllocLib.execute(createMemory, initialInt, declaredMaximum, sharedBoolean);
+                wasmMemory = memAllocLib.execute(createMemory, initialSize, declaredMaximum, sharedBoolean, addressType64);
             } catch (AbstractTruffleException tex) {
+                errorBranch.enter(this);
                 throw createCouldNotAllocateMemoryError(tex);
             } catch (InteropException ex) {
                 throw Errors.shouldNotReachHere(ex);
             }
             JSDynamicObject proto = getPrototype(realm, newTarget);
-            return JSWebAssemblyMemory.create(getContext(), realm, proto, wasmMemory, sharedBoolean, declaredMaximum);
+            return JSWebAssemblyMemory.create(getContext(), realm, proto, wasmMemory, sharedBoolean, declaredMaximum, addressType64);
         }
 
         @Override
@@ -3510,8 +3534,6 @@ public final class ConstructorBuiltins extends JSBuiltinsContainer.SwitchEnum<Co
 
     @ImportStatic(JSConfig.class)
     public abstract static class ConstructWebAssemblyTableNode extends ConstructWithNewTargetNode {
-        protected static final TruffleString ADDRESS = Strings.constant("address");
-
         @Child IsObjectNode isObjectNode;
         @Child PropertyGetNode getElementNode;
         @Child PropertyGetNode getInitialNode;
@@ -3526,7 +3548,7 @@ public final class ConstructorBuiltins extends JSBuiltinsContainer.SwitchEnum<Co
             this.getElementNode = PropertyGetNode.create(Strings.ELEMENT, context);
             this.getInitialNode = PropertyGetNode.create(Strings.INITIAL, context);
             this.getMaximumNode = PropertyGetNode.create(Strings.MAXIMUM, context);
-            this.getAddressNode = PropertyGetNode.create(ADDRESS, context);
+            this.getAddressNode = PropertyGetNode.create(Strings.ADDRESS, context);
             this.toInitialSizeNode = AddressValueToU64Node.create("WebAssembly.Table(): Property 'initial'");
             this.toMaximumSizeNode = AddressValueToU64Node.create("WebAssembly.Table(): Property 'maximum'");
         }

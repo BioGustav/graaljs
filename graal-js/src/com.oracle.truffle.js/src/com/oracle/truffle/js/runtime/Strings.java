@@ -501,6 +501,7 @@ public final class Strings {
     public static final TruffleString UC_ETC = constant("Etc");
 
     public static final TruffleString MUTABLE = constant("mutable");
+    public static final TruffleString ADDRESS = constant("address");
     public static final TruffleString ELEMENT = constant("element");
     public static final TruffleString INITIAL = constant("initial");
     public static final TruffleString MAXIMUM = constant("maximum");

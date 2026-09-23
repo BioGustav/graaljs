@@ -69,8 +69,9 @@ import com.oracle.truffle.js.runtime.objects.JSObject;
 import com.oracle.truffle.js.runtime.objects.JSObjectUtil;
 
 public class JSWebAssemblyMemory extends JSNonProxy implements JSConstructorFactory.Default, PrototypeSupplier {
-    public static final int NO_MAXIMUM = -1;
-    public static final int MAX_MEMORY_SIZE = 65536;
+    public static final long NO_MAXIMUM = -1;
+    public static final long MAX_MEMORY_SIZE = 1L << 16;
+    public static final long MAX_MEMORY_64_SIZE = (1L << 37) - 1;
     public static final TruffleString CLASS_NAME = Strings.constant("Memory");
     public static final TruffleString PROTOTYPE_NAME = Strings.constant("Memory.prototype");
 
@@ -116,28 +117,28 @@ public class JSWebAssemblyMemory extends JSNonProxy implements JSConstructorFact
         if (webAssemblyMemory != null) {
             return webAssemblyMemory;
         }
-        return create(context, realm, wasmMemory, shared, getMaximum(realm, wasmMemory));
+        return create(context, realm, wasmMemory, shared, getMaximum(realm, wasmMemory), hasAddressType64(realm, wasmMemory));
     }
 
-    public static JSWebAssemblyMemoryObject create(JSContext context, JSRealm realm, Object wasmMemory, boolean shared, long maximum) {
-        return create(context, realm, INSTANCE.getIntrinsicDefaultProto(realm), wasmMemory, shared, maximum);
+    public static JSWebAssemblyMemoryObject create(JSContext context, JSRealm realm, Object wasmMemory, boolean shared, long maximum, boolean addressType64) {
+        return create(context, realm, INSTANCE.getIntrinsicDefaultProto(realm), wasmMemory, shared, maximum, addressType64);
     }
 
-    public static JSWebAssemblyMemoryObject create(JSContext context, JSRealm realm, JSDynamicObject proto, Object wasmMemory, boolean shared, long maximum) {
+    public static JSWebAssemblyMemoryObject create(JSContext context, JSRealm realm, JSDynamicObject proto, Object wasmMemory, boolean shared, long maximum, boolean addressType64) {
         if (shared) {
-            return createShared(context, realm, proto, wasmMemory, maximum);
+            return createShared(context, realm, proto, wasmMemory, maximum, addressType64);
         } else {
             Object embedderData = JSWebAssembly.getEmbedderData(realm, wasmMemory);
             if (embedderData instanceof JSWebAssemblyMemoryObject webAssemblyMemory) {
                 return webAssemblyMemory;
             }
-            JSWebAssemblyMemoryObject webAssemblyMemory = createImpl(context, realm, proto, wasmMemory, false, maximum);
+            JSWebAssemblyMemoryObject webAssemblyMemory = createImpl(context, realm, proto, wasmMemory, false, maximum, addressType64);
             JSWebAssembly.setEmbedderData(realm, wasmMemory, webAssemblyMemory);
             return webAssemblyMemory;
         }
     }
 
-    private static JSWebAssemblyMemoryObject createShared(JSContext context, JSRealm realm, JSDynamicObject proto, Object wasmMemory, long maximum) {
+    private static JSWebAssemblyMemoryObject createShared(JSContext context, JSRealm realm, JSDynamicObject proto, Object wasmMemory, long maximum, boolean addressType64) {
         synchronized (wasmMemory) {
             Object embedderData = JSWebAssembly.getEmbedderData(realm, wasmMemory);
             SharedMemoryEmbedderData memoryEmbedderData;
@@ -151,7 +152,7 @@ public class JSWebAssemblyMemory extends JSNonProxy implements JSConstructorFact
                 memoryEmbedderData = new SharedMemoryEmbedderData();
                 JSWebAssembly.setEmbedderData(realm, wasmMemory, memoryEmbedderData);
             }
-            JSWebAssemblyMemoryObject webAssemblyMemory = createImpl(context, realm, proto, wasmMemory, true, maximum);
+            JSWebAssemblyMemoryObject webAssemblyMemory = createImpl(context, realm, proto, wasmMemory, true, maximum, addressType64);
             Boundaries.economicMapPut(memoryEmbedderData.map, realm.getAgent(), webAssemblyMemory);
             return webAssemblyMemory;
         }
@@ -198,10 +199,20 @@ public class JSWebAssemblyMemory extends JSNonProxy implements JSConstructorFact
         }
     }
 
-    private static JSWebAssemblyMemoryObject createImpl(JSContext context, JSRealm realm, JSDynamicObject proto, Object wasmMemory, boolean shared, long maximum) {
+    @TruffleBoundary
+    private static boolean hasAddressType64(JSRealm realm, Object wasmMemory) {
+        InteropLibrary interop = InteropLibrary.getUncached();
+        try {
+            return interop.asBoolean(interop.execute(realm.getWASMMemHasAddressType64(), wasmMemory));
+        } catch (InteropException ex) {
+            throw Errors.shouldNotReachHere(ex);
+        }
+    }
+
+    private static JSWebAssemblyMemoryObject createImpl(JSContext context, JSRealm realm, JSDynamicObject proto, Object wasmMemory, boolean shared, long maximum, boolean addressType64) {
         JSObjectFactory factory = context.getWebAssemblyMemoryFactory();
         var shape = factory.getShape(realm, proto);
-        var object = factory.initProto(new JSWebAssemblyMemoryObject(shape, proto, wasmMemory, shared, maximum), realm, proto);
+        var object = factory.initProto(new JSWebAssemblyMemoryObject(shape, proto, wasmMemory, shared, maximum, addressType64), realm, proto);
         return factory.trackAllocation(object);
     }
 
