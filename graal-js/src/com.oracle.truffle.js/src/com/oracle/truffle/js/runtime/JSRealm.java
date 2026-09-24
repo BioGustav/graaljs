@@ -835,7 +835,7 @@ public class JSRealm {
         this.stringIteratorPrototype = es6 ? JSStringIterator.INSTANCE.createPrototype(this, iteratorConstructor) : null;
         this.regExpStringIteratorPrototype = ecmaScriptVersion >= JSConfig.ECMAScript2019 ? createRegExpStringIteratorPrototype() : null;
 
-        this.intlFallbackSymbol = Symbol.create(context, INTL_LEGACY_CONSTRUCTED_SYMBOL);
+        this.intlFallbackSymbol = Symbol.create(INTL_LEGACY_CONSTRUCTED_SYMBOL);
         ctor = JSCollator.createConstructor(this);
         this.collatorConstructor = ctor.getFunctionObject();
         this.collatorPrototype = ctor.getPrototype();

@@ -310,7 +310,7 @@ public final class WeakMapPrototypeBuiltins extends JSBuiltinsContainer.SwitchEn
                 Boundaries.mapPut(invertedMap, map, value);
             } else {
                 Map<WeakMap, Object> newInvertedMap = map.newInvertedMapWithEntry(key, value);
-                key.setInvertedMap(newInvertedMap);
+                key.setInvertedMap(getJSContext(), newInvertedMap);
             }
             return thisObj;
         }
