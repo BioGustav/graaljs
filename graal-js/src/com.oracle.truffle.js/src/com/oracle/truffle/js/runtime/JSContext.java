@@ -286,15 +286,18 @@ public class JSContext {
     // Used to track singleton symbols allocations across aux engine cache runs.
     private Object symbolUsageMarker = new Object();
 
-    private final Map<Symbol, Boolean> unregisteredSymbols = ConcurrentWeakIdentityHashMap.create();
+    // Used to clear inverted maps from Symbols before storing the aux engine cache. Track
+    // only Symbols that actually acquired an inverted map to avoid scanning every Symbol allocation.
+    private final Map<Symbol, Boolean> symbolsWithInvertedMaps = ConcurrentWeakIdentityHashMap.create();
 
     @TruffleBoundary
-    public void unregisteredSymbolCreated(Symbol symbol) {
-        unregisteredSymbols.put(symbol, Boolean.TRUE);
+    void symbolInvertedMapCreated(Symbol symbol) {
+        symbolsWithInvertedMaps.put(symbol, Boolean.TRUE);
     }
 
     public void clearSymbolInvertedMaps() {
-        unregisteredSymbols.forEach((symbol, unused) -> symbol.clearInvertedMap());
+        symbolsWithInvertedMaps.forEach((symbol, unused) -> symbol.clearInvertedMap());
+        symbolsWithInvertedMaps.clear();
     }
 
     public void resetSymbolUsageMarker() {
