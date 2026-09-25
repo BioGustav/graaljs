@@ -54,11 +54,13 @@ import com.oracle.truffle.js.builtins.wasm.WebAssemblyMemoryPrototypeBuiltinsFac
 import com.oracle.truffle.js.builtins.wasm.WebAssemblyMemoryPrototypeBuiltinsFactory.WebAssemblyMemoryToResizableBufferNodeGen;
 import com.oracle.truffle.js.nodes.function.JSBuiltin;
 import com.oracle.truffle.js.nodes.function.JSBuiltinNode;
-import com.oracle.truffle.js.nodes.wasm.ToWebAssemblyIndexOrSizeNode;
+import com.oracle.truffle.js.nodes.wasm.AddressValueToU64Node;
+import com.oracle.truffle.js.runtime.BigInt;
 import com.oracle.truffle.js.runtime.Errors;
 import com.oracle.truffle.js.runtime.JSConfig;
 import com.oracle.truffle.js.runtime.JSContext;
 import com.oracle.truffle.js.runtime.JSRealm;
+import com.oracle.truffle.js.runtime.JSRuntime;
 import com.oracle.truffle.js.runtime.builtins.BuiltinEnum;
 import com.oracle.truffle.js.runtime.builtins.JSArrayBufferObject;
 import com.oracle.truffle.js.runtime.builtins.wasm.JSWebAssemblyMemory;
@@ -116,13 +118,13 @@ public class WebAssemblyMemoryPrototypeBuiltins extends JSBuiltinsContainer.Swit
     }
 
     public abstract static class WebAssemblyMemoryGrowNode extends JSBuiltinNode {
-        @Child ToWebAssemblyIndexOrSizeNode toDeltaNode;
+        @Child AddressValueToU64Node toDeltaNode;
         private final BranchProfile errorBranch = BranchProfile.create();
         @Child InteropLibrary memGrowLib = InteropLibrary.getFactory().createDispatched(JSConfig.InteropLibraryLimit);
 
         public WebAssemblyMemoryGrowNode(JSContext context, JSBuiltin builtin) {
             super(context, builtin);
-            this.toDeltaNode = ToWebAssemblyIndexOrSizeNode.create("WebAssembly.Memory.grow(): Argument 0");
+            this.toDeltaNode = AddressValueToU64Node.create("WebAssembly.Memory.grow(): Argument 0");
         }
 
         @Specialization
@@ -133,16 +135,17 @@ public class WebAssemblyMemoryPrototypeBuiltins extends JSBuiltinsContainer.Swit
             }
             JSWebAssemblyMemoryObject memory = (JSWebAssemblyMemoryObject) thiz;
             JSRealm realm = getRealm();
-            int deltaInt = toDeltaNode.executeInt(delta);
+            long deltaSize = toDeltaNode.execute(delta, memory.hasAddressType64());
             Object wasmMemory = memory.getWASMMemory();
             try {
                 Object growFn = realm.getWASMMemGrow();
-                return memGrowLib.execute(growFn, wasmMemory, deltaInt);
+                Object previousSize = memGrowLib.execute(growFn, wasmMemory, deltaSize);
+                return memory.hasAddressType64() ? BigInt.valueOfUnsigned(JSRuntime.longValue((Number) previousSize)) : previousSize;
             } catch (InteropException ex) {
                 throw Errors.shouldNotReachHere(ex);
             } catch (AbstractTruffleException ex) {
                 errorBranch.enter();
-                throw Errors.createRangeError(ex, this);
+                throw Errors.createRangeError("WebAssembly.Memory.grow(): Unable to grow instance memory", ex, this);
             }
         }
 

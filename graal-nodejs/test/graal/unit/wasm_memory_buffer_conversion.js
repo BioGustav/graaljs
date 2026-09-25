@@ -42,6 +42,7 @@
 'use strict';
 
 const assert = require('assert');
+const { spawnSync } = require('child_process');
 const { Worker } = require('worker_threads');
 
 if (typeof WebAssembly !== 'undefined') {
@@ -384,6 +385,47 @@ if (typeof WebAssembly !== 'undefined') {
         growableCurrent: true,
         memoryFirst: true,
       });
+    }).timeout(WORKER_TEST_TIMEOUT);
+
+    it.skipOnNode('preserves the address type of cloned shared memory64 objects and buffers', function() {
+      const source = `
+        const assert = require('assert');
+        const { Worker } = require('worker_threads');
+
+        const memory = new WebAssembly.Memory({ initial: 1n, maximum: 4n, shared: true, address: 'i64' });
+        const buffer = memory.toResizableBuffer();
+        const worker = new Worker(\`
+          const assert = require('assert');
+          const { parentPort } = require('worker_threads');
+          parentPort.once('message', ({ buffer, memory }) => {
+            assert.strictEqual(buffer, memory.buffer);
+            assert.strictEqual(memory.grow(0n), 1n);
+            buffer.grow(2 * ${PAGE_SIZE});
+            assert.strictEqual(memory.grow(0n), 2n);
+            parentPort.postMessage('ok');
+          });
+        \`, { eval: true });
+        worker.once('error', (error) => {
+          console.error(error.stack);
+          process.exitCode = 1;
+        });
+        worker.once('message', (message) => {
+          assert.strictEqual(message, 'ok');
+          console.log(message);
+          worker.terminate();
+        });
+        worker.postMessage({ buffer, memory });
+      `;
+      const result = spawnSync(process.execPath, [
+        '--experimental-options',
+        '--wasm.Memory64=true',
+        '--wasm.Threads=true',
+        '--wasm.UseUnsafeMemory=true',
+        '-e',
+        source,
+      ], { encoding: 'utf8' });
+      assert.strictEqual(result.status, 0, result.stderr);
+      assert.strictEqual(result.stdout, 'ok\n');
     }).timeout(WORKER_TEST_TIMEOUT);
 
     it('obtains the maximum before a module-defined memory is exported', function() {

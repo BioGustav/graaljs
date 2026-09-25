@@ -1206,6 +1206,11 @@ public final class JSRuntime {
     }
 
     @TruffleBoundary
+    public static String longToUnsignedString(long value) {
+        return Long.toUnsignedString(value);
+    }
+
+    @TruffleBoundary
     public static String formatDtoA(double value) {
         return DoubleConversion.toShortest(value);
     }

@@ -235,6 +235,7 @@ public class SerializedData {
         if (!sharedArrayBuffer.isFixedLength() && memoryObject instanceof JSWebAssemblyMemoryObject webAssemblyMemory) {
             data.add(Type.WebAssemblyMemoryBuffer);
             data.add(webAssemblyMemory.getWASMMemory());
+            data.add(webAssemblyMemory.hasAddressType64());
             data.add(sharedArrayBuffer.getWaiterList());
             return;
         }
@@ -367,6 +368,7 @@ public class SerializedData {
             JSArrayBufferObject arrayBuffer = memoryObject.getBufferObject(memoryObject.getJSContext(), JSRealm.get(null));
             data.add(Type.WebAssemblyMemory);
             data.add(wasmMemory);
+            data.add(memoryObject.hasAddressType64());
             serializeValue(arrayBuffer);
         } else {
             throw couldNotBeClonedError(memoryObject);
@@ -539,8 +541,10 @@ public class SerializedData {
 
     private static Object deserializeWebAssemblyMemory(JSRealm realm, Iterator<Object> iter, List<Object> deserialized) {
         Object wasmMemory = iter.next();
+        boolean addressType64 = (boolean) iter.next();
         JSContext context = realm.getContext();
         JSWebAssemblyMemoryObject webAssemblyMemory = JSWebAssemblyMemory.createMaximumUnknown(context, realm, wasmMemory, true);
+        assert webAssemblyMemory.hasAddressType64() == addressType64;
         deserialized.add(webAssemblyMemory);
         JSArrayBufferObject arrayBuffer = (JSArrayBufferObject) deserializeValue(realm, iter, deserialized);
         synchronized (wasmMemory) {
@@ -562,9 +566,11 @@ public class SerializedData {
 
     private static Object deserializeWebAssemblyMemoryBuffer(JSRealm realm, Iterator<Object> iter) {
         Object wasmMemory = iter.next();
+        boolean addressType64 = (boolean) iter.next();
         JSAgentWaiterList waiterList = (JSAgentWaiterList) iter.next();
         JSContext context = realm.getContext();
         JSWebAssemblyMemoryObject webAssemblyMemory = JSWebAssemblyMemory.createMaximumUnknown(context, realm, wasmMemory, true);
+        assert webAssemblyMemory.hasAddressType64() == addressType64;
         JSArrayBufferObject arrayBuffer = webAssemblyMemory.createResizableBufferObject(context, realm);
         JSSharedArrayBuffer.setWaiterList(arrayBuffer, waiterList);
         return arrayBuffer;

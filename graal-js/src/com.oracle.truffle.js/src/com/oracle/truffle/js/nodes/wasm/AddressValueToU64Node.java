@@ -50,7 +50,7 @@ import com.oracle.truffle.js.runtime.BigInt;
 import com.oracle.truffle.js.runtime.Errors;
 
 /**
- * Performs the AddressValueToU64 conversion used by WebAssembly tables.
+ * Performs the AddressValueToU64 conversion used by WebAssembly memories and tables.
  */
 public abstract class AddressValueToU64Node extends JavaScriptBaseNode {
     private final String errorMessagePrefix;
@@ -63,10 +63,10 @@ public abstract class AddressValueToU64Node extends JavaScriptBaseNode {
         return AddressValueToU64NodeGen.create(errorMessagePrefix);
     }
 
-    public abstract long execute(Object value, boolean indexType64);
+    public abstract long execute(Object value, boolean addressType64);
 
-    @Specialization(guards = "!indexType64")
-    protected long convertI32(Object value, @SuppressWarnings("unused") boolean indexType64,
+    @Specialization(guards = "!addressType64")
+    protected long convertI32(Object value, @SuppressWarnings("unused") boolean addressType64,
                     @Cached("createToWebAssemblyIndexOrSizeNode()") ToWebAssemblyIndexOrSizeNode toIndexOrSizeNode) {
         return toIndexOrSizeNode.executeInt(value);
     }
@@ -76,8 +76,8 @@ public abstract class AddressValueToU64Node extends JavaScriptBaseNode {
         return ToWebAssemblyIndexOrSizeNode.create(errorMessagePrefix);
     }
 
-    @Specialization(guards = "indexType64")
-    protected long convertI64(Object value, @SuppressWarnings("unused") boolean indexType64,
+    @Specialization(guards = "addressType64")
+    protected long convertI64(Object value, @SuppressWarnings("unused") boolean addressType64,
                     @Cached JSToBigIntNode toBigIntNode,
                     @Cached InlinedBranchProfile errorBranch) {
         BigInt valueBigInt = toBigIntNode.executeBigInteger(value);

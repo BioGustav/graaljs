@@ -2254,10 +2254,6 @@
     "status" : "FAIL",
     "comment" : "new failures 2026-02-12"
   }, {
-    "filePath" : "mjsunit/regress/wasm/regress-388290793.js",
-    "status" : "FAIL",
-    "comment" : "new failures 2025-02-10"
-  }, {
     "filePath" : "mjsunit/regress/wasm/regress-390467420.js",
     "status" : "FAIL",
     "comment" : "new failures 2025-02-10"
@@ -2366,10 +2362,6 @@
     "status" : "FAIL",
     "comment" : "GraalWasm rejects the requested 4 GiB shared memory before the test can exercise worker transfer."
   }, {
-    "filePath" : "mjsunit/regress/wasm/regress-487444465.js",
-    "status" : "FAIL",
-    "comment" : "GraalWasm does not accept BigInt memory64 limits in the WebAssembly.Memory constructor."
-  }, {
     "filePath" : "mjsunit/regress/wasm/regress-488943662.js",
     "status" : "FAIL",
     "comment" : "TestV8 does not implement d8.test.serializeModule()."
@@ -2397,10 +2389,6 @@
     "filePath" : "mjsunit/regress/wasm/regress-493171989.js",
     "status" : "FAIL",
     "comment" : "GraalWasm does not implement the shared-everything Wasm GC types and instructions used by the test."
-  }, {
-    "filePath" : "mjsunit/regress/wasm/regress-493197128.js",
-    "status" : "FAIL",
-    "comment" : "GraalWasm does not accept a BigInt memory64 delta in WebAssembly.Memory.prototype.grow."
   }, {
     "filePath" : "mjsunit/regress/wasm/regress-493521807.js",
     "status" : "FAIL",
@@ -3024,10 +3012,6 @@
     "filePath" : "mjsunit/wasm/memory-huge-constant-index.js",
     "status" : "FAIL",
     "comment" : "Test expects v8 to use the words 'Out of memory' when trying to instantiate a very large memory."
-  }, {
-    "filePath" : "mjsunit/wasm/memory-toresizable-max-byte-length.js",
-    "status" : "FAIL",
-    "comment" : "GraalJS does not accept BigInt memory64 limits in the WebAssembly.Memory constructor."
   }, {
     "filePath" : "mjsunit/wasm/memory64.js",
     "status" : "FAIL",
